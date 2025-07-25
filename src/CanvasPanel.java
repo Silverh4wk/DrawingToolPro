@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 import javax.swing.*;
+import javax.imageio.ImageIO;
+import java.io.IOException;
 
 public class CanvasPanel extends JPanel {
     private final BufferedImage canvasImage;
@@ -30,7 +32,6 @@ public class CanvasPanel extends JPanel {
     private final ToolManager toolManager;
     private final CanvasType canvasType; // To differentiate between drawing and composition canvas
     private final Point2D.Double panOffset = new Point2D.Double(0, 0);
-
 
     private int brushSize = 10;
     private Color brushColor = Color.BLACK;
@@ -329,7 +330,6 @@ public class CanvasPanel extends JPanel {
             Point center = new Point(getWidth() / 2, getHeight() / 2);
             zoom(zoomFactor, center);
         });
-        
 
         addMouseListener(adapter);
         addMouseMotionListener(adapter);
@@ -448,6 +448,20 @@ public class CanvasPanel extends JPanel {
             toolManager.setTool(new CreationTool(this));
         }
     }
+
+   public void placeImportedImage(BufferedImage image) {
+    if (canvasType == CanvasType.COMPOSITION) {
+        CreationType importedCreation = new CreationType("Imported Image", image);
+        
+        int centerX = getWidth() / 2;
+        int centerY = getHeight() / 2;
+        
+        DrawableItem newItem = new DrawableItem(importedCreation, centerX, centerY);
+        drawableItems.add(newItem);
+        selectedItem = newItem;
+        repaint();
+    }
+}
 
     public CreationType getCurrentCreation() {
         return currentSelectedCreation;

@@ -8,11 +8,20 @@ package src;
 
 import Helpers.*;
 import Tools.*;
+import javafx.scene.input.Clipboard;
+
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.imageio.ImageIO;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.*;
 import javax.swing.border.*;
 
@@ -89,13 +98,13 @@ public class ToolbarPanel extends JPanel {
         panel.setBackground(new Color(colorR, colorG, colorB));
 
         // Pen Tool
-        addToolButton(panel, "icons/toolbar/pen.png", new PenTool(), "Pen");
+        addToolButton(panel, "icons/toolbar/pen.png", new PenTool(), "");
 
         // Eraser Tool
-        addToolButton(panel, "icons/toolbar/eraser.png", new EraserTool(Color.WHITE), "Eraser");
+        addToolButton(panel, "icons/toolbar/eraser.png", new EraserTool(Color.WHITE), "");
 
         // Clear Canvas Button
-        JButton clearBtn = createIconButton("icons/toolbar/clear.png", "Clear");
+        JButton clearBtn = createIconButton("icons/toolbar/clear.png", "");
         clearBtn.addActionListener(e -> {
             if (activeCanvas != null) { // Add a null check for safety
                 new ClearCanvasTool(activeCanvas).onPress(); // Clear ONLY the activeCanvas
@@ -106,25 +115,153 @@ public class ToolbarPanel extends JPanel {
         panel.add(clearBtn);
 
         // Color Selector
-        JButton colorBtn = createIconButton("icons/toolbar/colorChooser.png", "Color");
+        JButton colorBtn = createIconButton("icons/toolbar/colorChooser.png", "");
         colorBtn.addActionListener(e -> ColorSelectorTool.onPress(rightCanvasPanel, colorChangeCallback));
         panel.add(colorBtn);
         // zoom
-        JButton zoomResetBtn = createIconButton("icons/toolbar/zoom_reset.png", "Reset");
+        JButton zoomResetBtn = createIconButton("icons/toolbar/zoom_reset.png", "");
         zoomResetBtn.addActionListener(e -> rightCanvasPanel.resetZoom());
         zoomResetBtn.addActionListener(e -> leftCanvasPanel.resetZoom());
         rightCanvasPanel.repaint(); // fixed the build problem for mac lol
         panel.add(zoomResetBtn);
 
         // Merge Button
-        mergeButton = createIconButton("icons/toolbar/merge.png", "merge");
+        mergeButton = createIconButton("icons/toolbar/merge.png", "");
         mergeButton.addActionListener(e -> {
             CanvasMerger.insertImageLayer(leftCanvasPanel, rightCanvasPanel);
         });
         panel.add(mergeButton);
 
+        // custom images
+        JButton importImageBtn = createIconButton("icons/toolbar/import.png", "");
+        importImageBtn.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Select an Image File");
+            fileChooser.addChoosableFileFilter(new FileNameExtensionFilter(
+                    "Image Files", "jpg", "jpeg", "png", "gif", "bmp"));
+            int result = fileChooser.showOpenDialog(this);
+            if (result == JFileChooser.APPROVE_OPTION) {
+                try {
+                    BufferedImage image = ImageIO.read(fileChooser.getSelectedFile());
+                    if (image != null) {
+                        leftCanvasPanel.placeImportedImage(image);
+                    }
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                    JOptionPane.showMessageDialog(this,
+                            "Error loading image file", "Import Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        panel.add(importImageBtn);
+
+        // pasting from clipboard
+        JButton pasteImageBtn = createIconButton("icons/toolbar/paste.png", "");
+        pasteImageBtn.addActionListener(e -> {
+            // get the system clipboard
+            java.awt.datatransfer.Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            Transferable contents = clipboard.getContents(null);
+
+            // check if it has an image
+            if (contents != null && contents.isDataFlavorSupported(DataFlavor.imageFlavor)) {
+                try {
+                    Image raw = (Image) contents.getTransferData(DataFlavor.imageFlavor);
+                    // convert to BufferedImage
+                    BufferedImage buf;
+                    if (raw instanceof BufferedImage) {
+                        buf = (BufferedImage) raw;
+                    } else {
+                        // draw into a BufferedImage
+                        buf = new BufferedImage(
+                                raw.getWidth(null),
+                                raw.getHeight(null),
+                                BufferedImage.TYPE_INT_ARGB);
+                        Graphics2D g2 = buf.createGraphics();
+                        g2.drawImage(raw, 0, 0, null);
+                        g2.dispose();
+                    }
+
+                    leftCanvasPanel.placeImportedImage(buf);
+
+                } catch (UnsupportedFlavorException | IOException ex) {
+                    ex.printStackTrace();
+                    JOptionPane.showMessageDialog(this,
+                            "Clipboard does not contain a valid image",
+                            "Paste Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "No image found in clipboard",
+                        "Paste Error",
+                        JOptionPane.WARNING_MESSAGE);
+            }
+        });
+        panel.add(pasteImageBtn);
         return panel;
+
     }
+    //pasting from clipboard
+    private void pasteFromClipboard() {
+    java.awt.datatransfer.Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+    Transferable contents = clipboard.getContents(null);
+
+    if (contents != null && contents.isDataFlavorSupported(DataFlavor.imageFlavor)) {
+        try {
+            Image raw = (Image) contents.getTransferData(DataFlavor.imageFlavor);
+
+            BufferedImage buf;
+            if (raw instanceof BufferedImage) {
+                buf = (BufferedImage) raw;
+            } else {
+                buf = new BufferedImage(
+                    raw.getWidth(null),
+                    raw.getHeight(null),
+                    BufferedImage.TYPE_INT_ARGB
+                );
+                Graphics2D g2 = buf.createGraphics();
+                g2.drawImage(raw, 0, 0, null);
+                g2.dispose();
+            }
+
+            leftCanvasPanel.placeImportedImage(buf);
+
+        } catch (UnsupportedFlavorException | IOException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Clipboard does not contain a valid image",
+                "Paste Error",
+                JOptionPane.ERROR_MESSAGE
+            );
+        }
+    } else {
+        JOptionPane.showMessageDialog(this,
+            "No image found in clipboard",
+            "Paste Error",
+            JOptionPane.WARNING_MESSAGE
+        );
+    }
+}
+    private void bindPasteShortcut() {
+    int menuMask = Toolkit.getDefaultToolkit()
+                          .getMenuShortcutKeyMaskEx();
+
+    KeyStroke pasteKS = KeyStroke.getKeyStroke(KeyEvent.VK_V, menuMask);
+
+    InputMap  im = leftCanvasPanel
+                      .getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+    ActionMap am = leftCanvasPanel.getActionMap();
+
+    im.put(pasteKS, "pasteImage");
+
+    am.put("pasteImage", new AbstractAction() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            pasteFromClipboard();
+        }
+    });
+}
 
     private JPanel createCanvasSelectionPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 2, horizontalGap, verticalGap));
@@ -327,9 +464,8 @@ public class ToolbarPanel extends JPanel {
         return components;
     }
 
-
     private void setupKeyBindings() {
-          }
+        bindPasteShortcut();
+    }
 
-    
 }
