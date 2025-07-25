@@ -29,12 +29,13 @@ public class CanvasPanel extends JPanel {
     private final Stack<BufferedImage> redoStackDrawing = new Stack<>(); // For drawing canvas
     private final ToolManager toolManager;
     private final CanvasType canvasType; // To differentiate between drawing and composition canvas
+    private final Point2D.Double panOffset = new Point2D.Double(0, 0);
+
 
     private int brushSize = 10;
     private Color brushColor = Color.BLACK;
     private float rotationAngle = 0.0f;
     private float zoomFactor = 1.0f;
-    private Point zoomOrigin = new Point(0, 0);
 
     private CreationType currentSelectedCreation; // For drawing library items on composition canvas
     private List<DrawableItem> drawableItems; // For composition canvas to hold multiple items
@@ -42,9 +43,11 @@ public class CanvasPanel extends JPanel {
     private Point lastMousePress; // For dragging selected items (moving or rotating)
     private double initialRotationAngle; // For gesture-based rotation
     private boolean isRotating = false; // Flag to indicate if currently rotating
-
+    private boolean isPanning = false;
+    private Point lastPanPoint = null;
     private double canvasRotationAngle = 0; // For rotating the entire canvas
     // Returns the current visible image of the canvas
+
     public BufferedImage getCanvasImage() {
         BufferedImage image = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = image.createGraphics();
@@ -53,6 +56,7 @@ public class CanvasPanel extends JPanel {
         g2d.dispose();
         return image;
     }
+
     // Sets the canvas image (used after merging)
     public void setCanvasImage(BufferedImage newImage) {
         Graphics2D g2d = canvasImage.createGraphics();
@@ -75,9 +79,8 @@ public class CanvasPanel extends JPanel {
             currentSelectedCreation = null;
 
             repaint();
-        } 
+        }
     }
-
 
     // Enum to define canvas types
     public enum CanvasType {
@@ -101,6 +104,8 @@ public class CanvasPanel extends JPanel {
 
     public void resetRotation() {
         rotationAngle = 0.0f;
+        panOffset.setLocation(0, 0);
+
         repaint();
     }
 
@@ -109,15 +114,23 @@ public class CanvasPanel extends JPanel {
         repaint();
     }
 
-    public void zoom(float factor) {
+    public void zoom(float factor, Point pivot) {
+        double oldZoom = zoomFactor;
         zoomFactor *= factor;
-        // limit between 10 and 1000
+
         zoomFactor = Math.max(0.1f, Math.min(10.0f, zoomFactor));
+
+        double actualFactor = zoomFactor / oldZoom;
+
+        panOffset.x = (int) (pivot.x - (pivot.x - panOffset.x) * actualFactor);
+        panOffset.y = (int) (pivot.y - (pivot.y - panOffset.y) * actualFactor);
+
         repaint();
     }
 
     public void resetZoom() {
         zoomFactor = 1.0f;
+        panOffset.setLocation(0, 0);
         repaint();
     }
 
@@ -128,8 +141,13 @@ public class CanvasPanel extends JPanel {
 
             @Override
             public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isMiddleMouseButton(e)) {
+                    isPanning = true;
+                    lastMousePress = e.getPoint();
+                    return;
+                }
                 saveStateForUndo();
-                prevPoint = e.getPoint();
+                prevPoint = transformPoint(e.getPoint());
                 dragStart = e.getPoint();
 
                 if (canvasType == CanvasType.COMPOSITION) {
@@ -141,7 +159,17 @@ public class CanvasPanel extends JPanel {
 
             @Override
             public void mouseDragged(MouseEvent e) {
-                Point current = e.getPoint();
+
+                if (isPanning) {
+                    Point current = e.getPoint();
+                    panOffset.x += current.x - lastMousePress.x;
+                    panOffset.y += current.y - lastMousePress.y;
+                    lastMousePress = current;
+                    repaint();
+                    return;
+                }
+
+                Point current = transformPoint(e.getPoint());
 
                 if (canvasType == CanvasType.COMPOSITION && selectedItem != null) {
                     handleCompositionDrag(e, current);
@@ -152,12 +180,38 @@ public class CanvasPanel extends JPanel {
                 repaint();
             }
 
+            // when mouse released, reset all of those flags back to normal
             @Override
             public void mouseReleased(MouseEvent e) {
+                isPanning = false;
                 prevPoint = null;
                 dragStart = null;
                 isRotating = false;
                 repaint();
+            }
+
+            private Point transformPoint(Point p) {
+                // apply the inverse transformations to get image coordinates
+                double x = (p.x - panOffset.x) / zoomFactor;
+                double y = (p.y - panOffset.y) / zoomFactor;
+
+                if (canvasType == CanvasType.COMPOSITION) {
+                    // reverse canvas rotation
+                    double centerX = getWidth() / 2.0;
+                    double centerY = getHeight() / 2.0;
+
+                    double tx = x - centerX;
+                    double ty = y - centerY;
+
+                    double rad = Math.toRadians(-canvasRotationAngle);
+                    double rx = tx * Math.cos(rad) - ty * Math.sin(rad);
+                    double ry = tx * Math.sin(rad) + ty * Math.cos(rad);
+
+                    x = rx + centerX;
+                    y = ry + centerY;
+                }
+
+                return new Point((int) x, (int) y);
             }
 
             private void handleCompositionMousePress(MouseEvent e) {
@@ -228,20 +282,20 @@ public class CanvasPanel extends JPanel {
             }
 
             // private void moveItem(Point current) {
-            //     int dx = current.x - dragStart.x;
-            //     int dy = current.y - dragStart.y;
-            //     selectedItem.setPosition(
-            //             selectedItem.getX() + dx,
-            //             selectedItem.getY() + dy);
-            //     dragStart = current;
+            // int dx = current.x - dragStart.x;
+            // int dy = current.y - dragStart.y;
+            // selectedItem.setPosition(
+            // selectedItem.getX() + dx,
+            // selectedItem.getY() + dy);
+            // dragStart = current;
             // }
             // private void moveItem(Point current) {
-            //     int dx = current.x - dragStart.x;
-            //     int dy = current.y - dragStart.y;
-            //     selectedItem.setPosition(
-            //             selectedItem.getX() + dx,
-            //             selectedItem.getY() + dy);
-            //     dragStart = current;
+            // int dx = current.x - dragStart.x;
+            // int dy = current.y - dragStart.y;
+            // selectedItem.setPosition(
+            // selectedItem.getX() + dx,
+            // selectedItem.getY() + dy);
+            // dragStart = current;
             // }
 
             private void moveItem(Point current) {
@@ -253,16 +307,29 @@ public class CanvasPanel extends JPanel {
                 dragStart = current;
             }
 
-            
             private void drawOnCanvas(Point start, Point end) {
                 Graphics2D g = canvasImage.createGraphics();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                Point imgStart = transformPoint(start);
+                Point imgEnd = transformPoint(end);
+
                 toolManager.useTool(g,
-                        end.x, end.y,
-                        brushSize, brushColor,
-                        start.x, start.y);
+                        imgEnd.x, imgEnd.y,
+                        (int) (brushSize / zoomFactor),
+                        brushColor,
+                        imgStart.x, imgStart.y);
+
                 g.dispose();
             }
         };
+        // idk why i didnt use the mouse wheel to begin with
+        addMouseWheelListener(e -> {
+            float zoomFactor = (e.getWheelRotation() < 0) ? 1.1f : 0.9f;
+            Point center = new Point(getWidth() / 2, getHeight() / 2);
+            zoom(zoomFactor, center);
+        });
+        
 
         addMouseListener(adapter);
         addMouseMotionListener(adapter);
@@ -274,21 +341,22 @@ public class CanvasPanel extends JPanel {
 
         Graphics2D g2d = (Graphics2D) g;
 
-        g2d.scale(zoomFactor, zoomFactor);
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        AffineTransform originalTransform = g2d.getTransform();
+        g2d.translate(panOffset.x, panOffset.y);
+        g2d.scale(zoomFactor, zoomFactor);
 
         int centerX = getWidth() / 2;
         int centerY = getHeight() / 2;
-        g2d.rotate(Math.toRadians(rotationAngle), centerX / zoomFactor, centerY / zoomFactor);
+
+        AffineTransform originalTransform = g2d.getTransform();
+
+        g2d.rotate(Math.toRadians(rotationAngle), centerX, centerY);
 
         if (canvasType == CanvasType.COMPOSITION) {
-            AffineTransform canvasRotation = new AffineTransform();
-            canvasRotation.rotate(Math.toRadians(canvasRotationAngle), getWidth() / 2.0, getHeight() / 2.0);
-            g2d.transform(canvasRotation);
+            g2d.rotate(Math.toRadians(canvasRotationAngle), centerX, centerY);
         }
 
         g2d.drawImage(canvasImage, 0, 0, null);
@@ -299,7 +367,7 @@ public class CanvasPanel extends JPanel {
             }
             if (selectedItem != null) {
                 g2d.setColor(Color.BLUE);
-                g2d.setStroke(new BasicStroke(2));
+                g2d.setStroke(new BasicStroke(2 / zoomFactor));
                 Rectangle bounds = selectedItem.getBounds();
                 g2d.drawRect(bounds.x, bounds.y, bounds.width, bounds.height);
             }
@@ -309,11 +377,11 @@ public class CanvasPanel extends JPanel {
         g2d.dispose();
     }
 
-   public void clearCanvas() {
+    public void clearCanvas() {
         // Clear the canvas image by filling it with an opaque white background
         Graphics2D g = canvasImage.createGraphics();
         g.setComposite(java.awt.AlphaComposite.Src);
-        g.setColor(Color.WHITE); 
+        g.setColor(Color.WHITE);
         g.fillRect(0, 0, canvasImage.getWidth(), canvasImage.getHeight());
         g.dispose();
 
@@ -321,15 +389,14 @@ public class CanvasPanel extends JPanel {
         if (canvasType == CanvasType.COMPOSITION) {
             if (drawableItems != null) {
                 drawableItems.clear();
-                
+
             }
             selectedItem = null; // Deselect any item
         }
         repaint(); // Request a redraw of the canvas after clearing
-       
+
     }
 
- 
     public BufferedImage getImage() {
         // For composition canvas, render all drawable items onto a new BufferedImage
         if (canvasType == CanvasType.COMPOSITION) {
@@ -345,7 +412,6 @@ public class CanvasPanel extends JPanel {
             g2d.fillRect(0, 0, getWidth(), getHeight());
 
             AffineTransform canvasRotation = new AffineTransform(); // 1. Apply the current canvas rotation
-            canvasRotation.rotate(Math.toRadians(canvasRotationAngle), getWidth() / 2.0, getHeight() / 2.0);
             g2d.transform(canvasRotation);
 
             if (drawableItems != null) {
@@ -380,14 +446,14 @@ public class CanvasPanel extends JPanel {
         if (this.canvasType == CanvasType.COMPOSITION) {
             this.currentSelectedCreation = creationType;
             toolManager.setTool(new CreationTool(this));
-        } 
+        }
     }
 
     public CreationType getCurrentCreation() {
         return currentSelectedCreation;
     }
 
-    // get the list of drawable items 
+    // get the list of drawable items
     public List<DrawableItem> getDrawableItems() {
         return drawableItems;
     }
@@ -412,8 +478,9 @@ public class CanvasPanel extends JPanel {
         if (canvasType == CanvasType.COMPOSITION && selectedItem != null) {
             selectedItem.setFlippedX(!selectedItem.isFlippedX());
             repaint();
-        } 
+        }
     }
+
     /**
      * Flips the currently selected DrawableItem on the composition canvas
      * vertically.
@@ -422,7 +489,7 @@ public class CanvasPanel extends JPanel {
         if (canvasType == CanvasType.COMPOSITION && selectedItem != null) {
             selectedItem.setFlippedY(!selectedItem.isFlippedY());
             repaint();
-        } 
+        }
     }
 
     // Rotates the currently selected DrawableItem on the composition canvas.
@@ -430,7 +497,7 @@ public class CanvasPanel extends JPanel {
         if (canvasType == CanvasType.COMPOSITION && selectedItem != null) {
             selectedItem.setRotationAngle(selectedItem.getRotationAngle() + angle);
             repaint();
-        } 
+        }
     }
 
     // Scales DrawableItem on the composition canvas.
@@ -438,7 +505,7 @@ public class CanvasPanel extends JPanel {
         if (canvasType == CanvasType.COMPOSITION && selectedItem != null) {
             selectedItem.setScale(scale);
             repaint();
-        } 
+        }
     }
 
     // Rotates the entire composition canvas.
@@ -456,7 +523,7 @@ public class CanvasPanel extends JPanel {
                 }
             }
             repaint();
-        } 
+        }
     }
 
     private void saveStateForUndo() {
@@ -492,13 +559,13 @@ public class CanvasPanel extends JPanel {
                 this.drawableItems.addAll(previousState);
                 setSelectedItem((DrawableItem) null); // Deselect any item
                 repaint();
-            } 
+            }
         } else { // Drawing canvas
             if (!undoStackDrawing.isEmpty()) {
                 redoStackDrawing.push(copyCanvas());
                 BufferedImage previous = undoStackDrawing.pop();
                 drawImageOnCanvas(previous);
-                repaint(); 
+                repaint();
             }
         }
     }
@@ -517,14 +584,14 @@ public class CanvasPanel extends JPanel {
                 this.drawableItems.addAll(nextState);
                 setSelectedItem((DrawableItem) null); // Deselect any item
                 repaint();
-            } 
+            }
         } else { // Drawing canvas
             if (!redoStackDrawing.isEmpty()) {
                 undoStackDrawing.push(copyCanvas());
                 BufferedImage next = redoStackDrawing.pop();
                 drawImageOnCanvas(next);
                 repaint();
-            } 
+            }
         }
     }
 

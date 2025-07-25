@@ -37,9 +37,10 @@ public class ToolbarPanel extends JPanel {
     private int dimensionWidth = 250; // Width of the toolbar panel
     private int colorR = 64;
     private int colorG = 64;
-    private int colorB = 64; 
+    private int colorB = 64;
+
     public ToolbarPanel(ToolManager toolManager, CanvasPanel leftCanvasPanel, CanvasPanel rightCanvasPanel,
-                        Consumer<Color> colorChangeCallback, CreationPanel creationPanel) {
+            Consumer<Color> colorChangeCallback, CreationPanel creationPanel) {
         this.toolManager = toolManager;
         this.leftCanvasPanel = leftCanvasPanel;
         this.rightCanvasPanel = rightCanvasPanel;
@@ -96,11 +97,11 @@ public class ToolbarPanel extends JPanel {
         // Clear Canvas Button
         JButton clearBtn = createIconButton("icons/toolbar/clear.png", "Clear");
         clearBtn.addActionListener(e -> {
-        if (activeCanvas != null) { // Add a null check for safety
-            new ClearCanvasTool(activeCanvas).onPress(); // Clear ONLY the activeCanvas
-        } else {
-            System.out.println("No active canvas selected to clear.");
-        }
+            if (activeCanvas != null) { // Add a null check for safety
+                new ClearCanvasTool(activeCanvas).onPress(); // Clear ONLY the activeCanvas
+            } else {
+                System.out.println("No active canvas selected to clear.");
+            }
         });
         panel.add(clearBtn);
 
@@ -110,12 +111,16 @@ public class ToolbarPanel extends JPanel {
         panel.add(colorBtn);
         // zoom
         JButton zoomResetBtn = createIconButton("icons/toolbar/zoom_reset.png", "Reset");
-        zoomResetBtn.addActionListener(e -> rightCanvasPanel.resetZoom()); // fixed the build problem for mac lol
+        zoomResetBtn.addActionListener(e -> rightCanvasPanel.resetZoom());
+        zoomResetBtn.addActionListener(e -> leftCanvasPanel.resetZoom());
+        rightCanvasPanel.repaint(); // fixed the build problem for mac lol
         panel.add(zoomResetBtn);
 
-        //Merge Button
+        // Merge Button
         mergeButton = createIconButton("icons/toolbar/merge.png", "merge");
-        mergeButton.addActionListener(e -> { CanvasMerger.insertImageLayer(leftCanvasPanel, rightCanvasPanel);});
+        mergeButton.addActionListener(e -> {
+            CanvasMerger.insertImageLayer(leftCanvasPanel, rightCanvasPanel);
+        });
         panel.add(mergeButton);
 
         return panel;
@@ -168,7 +173,7 @@ public class ToolbarPanel extends JPanel {
         rotationLabel.setForeground(Color.WHITE);
         JSlider rotationSlider = new JSlider(0, 360, 0);
         rotationSlider.setName("transform_rotation");
-        rotationSlider.setBackground(new Color(colorR,colorG, colorB));
+        rotationSlider.setBackground(new Color(colorR, colorG, colorB));
         rotationSlider.setForeground(Color.WHITE);
         configureSlider(rotationSlider, 90);
 
@@ -250,14 +255,16 @@ public class ToolbarPanel extends JPanel {
 
         return panel;
     }
-// * Configures the slider with ticks and labels
+
+    // * Configures the slider with ticks and labels
     private void configureSlider(JSlider slider, int majorTick) {
         slider.setPaintTicks(true);
         slider.setPaintLabels(true);
         slider.setMajorTickSpacing(majorTick);
         slider.setMinorTickSpacing(majorTick / 2);
     }
-// * Creates an icon button with the specified icon path and text
+
+    // * Creates an icon button with the specified icon path and text
     private JButton createIconButton(String iconPath, String text) {
         ImageIcon icon = new ImageIcon(iconPath);
         icon = Helpers.iconSizeChanger(icon, iconSizeX, iconSizeY);
@@ -270,7 +277,8 @@ public class ToolbarPanel extends JPanel {
 
         return button;
     }
- // * Adds a tool button to the specified panel with an icon and action listener
+
+    // * Adds a tool button to the specified panel with an icon and action listener
     private void addToolButton(JPanel panel, String iconPath, Tool tool, String text) {
         JButton button = createIconButton(iconPath, text);
         button.addActionListener(e -> {
@@ -280,7 +288,8 @@ public class ToolbarPanel extends JPanel {
         });
         panel.add(button);
     }
-// * Sets the active canvas 
+
+    // * Sets the active canvas
     private void setActiveCanvas(CanvasPanel canvas) {
         this.activeCanvas = canvas;
         leftCanvasBtn.setBackground(canvas == leftCanvasPanel ? new Color(80, 80, 80) : new Color(64, 64, 64));
@@ -318,49 +327,9 @@ public class ToolbarPanel extends JPanel {
         return components;
     }
 
-    private final MouseMotionListener zoomMotionListener = new MouseMotionAdapter() {
-        @Override
-        public void mouseMoved(MouseEvent e) {
-            if (isZooming) {
-                int currentY = e.getY();
-
-                if (lastMouseY != 0) {
-                    int deltaY = lastMouseY - currentY;
-                    float zoomFactor = 1.0f + (deltaY * 0.01f);
-                    rightCanvasPanel.zoom(zoomFactor);
-                }
-
-                lastMouseY = currentY;
-            }
-        }
-    };
 
     private void setupKeyBindings() {
-        // Start zooming on Ctrl+Space (Windows/Linux) OR Command+Space (macOS)
-        Helpers.KeyBindingHelper.bind(rightCanvasPanel, "ctrl SPACE", "startZoomCtrl", e -> startZooming());
-        Helpers.KeyBindingHelper.bind(rightCanvasPanel, "meta SPACE", "startZoomMeta", e -> startZooming());
+          }
 
-        // End zooming on release of Ctrl (Windows/Linux) OR Meta (macOS)
-        Helpers.KeyBindingHelper.bind(rightCanvasPanel, "released ctrl", "endZoomOnCtrlRelease", e -> endZooming());
-        Helpers.KeyBindingHelper.bind(rightCanvasPanel, "released meta", "endZoomOnMetaRelease", e -> endZooming());
-
-        Helpers.KeyBindingHelper.bind(rightCanvasPanel, "released SPACE", "endZoomOnSpaceRelease", e -> endZooming());
-    }
-
-    private void startZooming() {
-        isZooming = true;
-        lastMouseY = 0;
-        rightCanvasPanel.addMouseMotionListener(zoomMotionListener);
-        rightCanvasPanel.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-        rightCanvasPanel.requestFocusInWindow();
-    }
-
-    private void endZooming() {
-        if (isZooming) {
-            isZooming = false;
-            rightCanvasPanel.removeMouseMotionListener(zoomMotionListener);
-            rightCanvasPanel.setCursor(Cursor.getDefaultCursor());
-        }
-    }
-
+    
 }
