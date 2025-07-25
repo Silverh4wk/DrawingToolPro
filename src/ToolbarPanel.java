@@ -25,7 +25,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.*;
 import javax.swing.border.*;
 
-public class ToolbarPanel extends JPanel {
+public class ToolbarPanel extends JToolBar {
     private final ToolManager toolManager;
     private final CanvasPanel leftCanvasPanel;
     private final CanvasPanel rightCanvasPanel;
@@ -50,6 +50,9 @@ public class ToolbarPanel extends JPanel {
 
     public ToolbarPanel(ToolManager toolManager, CanvasPanel leftCanvasPanel, CanvasPanel rightCanvasPanel,
             Consumer<Color> colorChangeCallback, CreationPanel creationPanel) {
+        super(JToolBar.VERTICAL);
+        setFloatable(true); // for draggin it around
+        setRollover(true);
         this.toolManager = toolManager;
         this.leftCanvasPanel = leftCanvasPanel;
         this.rightCanvasPanel = rightCanvasPanel;
@@ -85,12 +88,12 @@ public class ToolbarPanel extends JPanel {
         add(titleLabel);
 
         content.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.setBackground(new Color(colorR, colorG, colorB));
+        // content.setBackground(new Color(colorR, colorG, colorB));
         add(content);
-
-        add(Box.createVerticalStrut(10)); // Spacing between sections
-        add(new JSeparator());
-        add(Box.createVerticalStrut(10));
+        addSeparator(new Dimension(0, 10));
+        // add(Box.createVerticalStrut(10)); // Spacing between sections
+        // add(new JSeparator());
+        // add(Box.createVerticalStrut(10));
     }
 
     private JPanel createDrawingToolsPanel() {
@@ -202,66 +205,65 @@ public class ToolbarPanel extends JPanel {
         return panel;
 
     }
-    //pasting from clipboard
+
+    // pasting from clipboard
     private void pasteFromClipboard() {
-    java.awt.datatransfer.Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-    Transferable contents = clipboard.getContents(null);
+        java.awt.datatransfer.Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        Transferable contents = clipboard.getContents(null);
 
-    if (contents != null && contents.isDataFlavorSupported(DataFlavor.imageFlavor)) {
-        try {
-            Image raw = (Image) contents.getTransferData(DataFlavor.imageFlavor);
+        if (contents != null && contents.isDataFlavorSupported(DataFlavor.imageFlavor)) {
+            try {
+                Image raw = (Image) contents.getTransferData(DataFlavor.imageFlavor);
 
-            BufferedImage buf;
-            if (raw instanceof BufferedImage) {
-                buf = (BufferedImage) raw;
-            } else {
-                buf = new BufferedImage(
-                    raw.getWidth(null),
-                    raw.getHeight(null),
-                    BufferedImage.TYPE_INT_ARGB
-                );
-                Graphics2D g2 = buf.createGraphics();
-                g2.drawImage(raw, 0, 0, null);
-                g2.dispose();
+                BufferedImage buf;
+                if (raw instanceof BufferedImage) {
+                    buf = (BufferedImage) raw;
+                } else {
+                    buf = new BufferedImage(
+                            raw.getWidth(null),
+                            raw.getHeight(null),
+                            BufferedImage.TYPE_INT_ARGB);
+                    Graphics2D g2 = buf.createGraphics();
+                    g2.drawImage(raw, 0, 0, null);
+                    g2.dispose();
+                }
+
+                leftCanvasPanel.placeImportedImage(buf);
+
+            } catch (UnsupportedFlavorException | IOException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this,
+                        "Clipboard does not contain a valid image",
+                        "Paste Error",
+                        JOptionPane.ERROR_MESSAGE);
             }
-
-            leftCanvasPanel.placeImportedImage(buf);
-
-        } catch (UnsupportedFlavorException | IOException ex) {
-            ex.printStackTrace();
+        } else {
             JOptionPane.showMessageDialog(this,
-                "Clipboard does not contain a valid image",
-                "Paste Error",
-                JOptionPane.ERROR_MESSAGE
-            );
+                    "No image found in clipboard",
+                    "Paste Error",
+                    JOptionPane.WARNING_MESSAGE);
         }
-    } else {
-        JOptionPane.showMessageDialog(this,
-            "No image found in clipboard",
-            "Paste Error",
-            JOptionPane.WARNING_MESSAGE
-        );
     }
-}
+
     private void bindPasteShortcut() {
-    int menuMask = Toolkit.getDefaultToolkit()
-                          .getMenuShortcutKeyMaskEx();
+        int menuMask = Toolkit.getDefaultToolkit()
+                .getMenuShortcutKeyMaskEx();
 
-    KeyStroke pasteKS = KeyStroke.getKeyStroke(KeyEvent.VK_V, menuMask);
+        KeyStroke pasteKS = KeyStroke.getKeyStroke(KeyEvent.VK_V, menuMask);
 
-    InputMap  im = leftCanvasPanel
-                      .getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-    ActionMap am = leftCanvasPanel.getActionMap();
+        InputMap im = leftCanvasPanel
+                .getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = leftCanvasPanel.getActionMap();
 
-    im.put(pasteKS, "pasteImage");
+        im.put(pasteKS, "pasteImage");
 
-    am.put("pasteImage", new AbstractAction() {
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            pasteFromClipboard();
-        }
-    });
-}
+        am.put("pasteImage", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                pasteFromClipboard();
+            }
+        });
+    }
 
     private JPanel createCanvasSelectionPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 2, horizontalGap, verticalGap));
