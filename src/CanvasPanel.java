@@ -32,7 +32,7 @@ public class CanvasPanel extends JPanel {
     private final ToolManager toolManager;
     private final CanvasType canvasType; // To differentiate between drawing and composition canvas
     private final Point2D.Double panOffset = new Point2D.Double(0, 0);
-
+    private boolean spaceDown = false; // if spacebar is pressed down or not for panning
     private int brushSize = 10;
     private Color brushColor = Color.BLACK;
     private float rotationAngle = 0.0f;
@@ -99,6 +99,32 @@ public class CanvasPanel extends JPanel {
         if (this.canvasType == CanvasType.COMPOSITION) {
             drawableItems = new ArrayList<>();
         }
+        setFocusable(true);
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                    spaceDown = true;
+                    setCursor(new Cursor(Cursor.MOVE_CURSOR));
+                }
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                    spaceDown = false;
+                    setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+                }
+            }
+        });
+
+        addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusLost(FocusEvent e) {
+                spaceDown = false;
+                setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+            }
+        });
 
         initializeMouseListeners();
     }
@@ -142,6 +168,8 @@ public class CanvasPanel extends JPanel {
 
             @Override
             public void mousePressed(MouseEvent e) {
+                requestFocusInWindow();
+
                 if (SwingUtilities.isMiddleMouseButton(e)) {
                     isPanning = true;
                     lastMousePress = e.getPoint();
@@ -150,17 +178,40 @@ public class CanvasPanel extends JPanel {
                 saveStateForUndo();
                 prevPoint = transformPoint(e.getPoint());
                 dragStart = e.getPoint();
-
+                // for panning while zoomed in, to move the screen around and make it easier to
+                // see what u doing
+                // check to see if space is held down, then turn the panning flag to true
+                if (spaceDown || SwingUtilities.isRightMouseButton(e)) {
+                    isPanning = true;
+                    lastPanPoint = e.getPoint();
+                    setCursor(new Cursor(Cursor.MOVE_CURSOR));
+                    return;
+                }
                 if (canvasType == CanvasType.COMPOSITION) {
                     handleCompositionMousePress(e);
                 } else if (canvasType == CanvasType.DRAWING) {
                 }
+
                 repaint();
             }
 
             @Override
             public void mouseDragged(MouseEvent e) {
+                Point current1 = e.getPoint();
 
+                if (spaceDown) {
+                    if (lastPanPoint != null) {
+                        double dx = current1.x - lastPanPoint.x;
+                        double dy = current1.y - lastPanPoint.y;
+                        panOffset.x += dx;
+                        panOffset.y += dy;
+                        lastPanPoint = current1;
+                        repaint();
+                    } else {
+                        lastPanPoint = current1; 
+                    }
+                    return;
+                }
                 if (isPanning) {
                     Point current = e.getPoint();
                     panOffset.x += current.x - lastMousePress.x;
@@ -185,9 +236,15 @@ public class CanvasPanel extends JPanel {
             @Override
             public void mouseReleased(MouseEvent e) {
                 isPanning = false;
+                lastPanPoint = null;
                 prevPoint = null;
                 dragStart = null;
+                lastPanPoint = null;
                 isRotating = false;
+                if (!spaceDown) {
+                    setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+                }
+
                 repaint();
             }
 
@@ -312,16 +369,23 @@ public class CanvasPanel extends JPanel {
                 Graphics2D g = canvasImage.createGraphics();
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-                Point imgStart = transformPoint(start);
-                Point imgEnd = transformPoint(end);
+                // Point imgStart = transformPoint(start);
+                // Point imgEnd = transformPoint(end);
 
                 toolManager.useTool(g,
-                        imgEnd.x, imgEnd.y,
+                        end.x, end.y,
                         (int) (brushSize / zoomFactor),
                         brushColor,
-                        imgStart.x, imgStart.y);
+                        start.x, start.y);
 
                 g.dispose();
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                if (spaceDown) {
+                    setCursor(new Cursor(Cursor.MOVE_CURSOR));
+                }
             }
         };
         // idk why i didnt use the mouse wheel to begin with
@@ -449,19 +513,19 @@ public class CanvasPanel extends JPanel {
         }
     }
 
-   public void placeImportedImage(BufferedImage image) {
-    if (canvasType == CanvasType.COMPOSITION) {
-        CreationType importedCreation = new CreationType("Imported Image", image);
-        
-        int centerX = getWidth() / 2;
-        int centerY = getHeight() / 2;
-        
-        DrawableItem newItem = new DrawableItem(importedCreation, centerX, centerY);
-        drawableItems.add(newItem);
-        selectedItem = newItem;
-        repaint();
+    public void placeImportedImage(BufferedImage image) {
+        if (canvasType == CanvasType.COMPOSITION) {
+            CreationType importedCreation = new CreationType("Imported Image", image);
+
+            int centerX = getWidth() / 2;
+            int centerY = getHeight() / 2;
+
+            DrawableItem newItem = new DrawableItem(importedCreation, centerX, centerY);
+            drawableItems.add(newItem);
+            selectedItem = newItem;
+            repaint();
+        }
     }
-}
 
     public CreationType getCurrentCreation() {
         return currentSelectedCreation;
