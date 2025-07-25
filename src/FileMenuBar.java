@@ -11,6 +11,7 @@ import com.formdev.flatlaf.FlatDarculaLaf;
 import com.formdev.flatlaf.FlatIntelliJLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
+import Tools.SaveImageTool;
 
 import java.awt.Component; // Needed for SwingUtilities.getWindowAncestor
 import java.awt.image.BufferedImage;
@@ -35,11 +36,11 @@ public class FileMenuBar extends JMenuBar {
 
         // File menu items
         JMenuItem saveDrawingCanvasItem = new JMenuItem("Save Drawing Canvas");
-        saveDrawingCanvasItem.addActionListener(e -> saveCanvas(rightCanvasPanel, "drawing_artwork.png"));
+        saveDrawingCanvasItem.addActionListener(e -> SaveImageTool.saveImage(rightCanvasPanel));
         fileMenu.add(saveDrawingCanvasItem);
 
         JMenuItem saveCompositionCanvasItem = new JMenuItem("Save Composition Canvas");
-        saveCompositionCanvasItem.addActionListener(e -> saveCanvas(leftCanvasPanel, "composition_artwork.png"));
+        saveCompositionCanvasItem.addActionListener(e -> SaveImageTool.saveImage(leftCanvasPanel));
         fileMenu.add(saveCompositionCanvasItem);
 
         // Add "Add to Library" for current drawing canvas

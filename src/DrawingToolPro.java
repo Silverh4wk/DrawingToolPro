@@ -46,16 +46,18 @@ public class DrawingToolPro extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
         toolManager = new ToolManager();
-        
+
         // Initialize both canvas panels with their respective dimensions
         leftCanvasPanel = new CanvasPanel(toolManager, leftCanvasDimensions, CanvasPanel.CanvasType.COMPOSITION);
         rightCanvasPanel = new CanvasPanel(toolManager, rightCanvasDimensions, CanvasPanel.CanvasType.DRAWING);
 
-        // Instantiate CreationPanel FIRST, as it's needed by ToolbarPanel and FileMenuBar
+        // Instantiate CreationPanel FIRST, as it's needed by ToolbarPanel and
+        // FileMenuBar
         creationPanel = new CreationPanel(leftCanvasPanel);
 
         // Pass both canvas panels and creationPanel to ToolbarPanel constructor
-        ToolbarPanel toolbar = new ToolbarPanel(toolManager, leftCanvasPanel, rightCanvasPanel, this::onColorChange, creationPanel);
+        ToolbarPanel toolbar = new ToolbarPanel(toolManager, leftCanvasPanel, rightCanvasPanel, this::onColorChange,
+                creationPanel);
 
         // Pass both canvas panels and creationPanel to FileMenuBar
         fileMenuBar = new FileMenuBar(leftCanvasPanel, rightCanvasPanel, creationPanel);
@@ -79,13 +81,28 @@ public class DrawingToolPro extends JFrame {
         // Minimum sizes for split pane components
         Dimension creationPanelMinSize = new Dimension(creationPanelWidth, leftCanvasDimensions.getY());
         creationPanel.setMinimumSize(creationPanelMinSize);
-        
+
         // Set minimum sizes for canvases
         leftCanvasPanel.setMinimumSize(new Dimension(leftCanvasDimensions.getX() / 3, leftCanvasDimensions.getY()));
         rightCanvasPanel.setMinimumSize(new Dimension(rightCanvasDimensions.getX() / 3, rightCanvasDimensions.getY()));
 
-        // Create and configure JSplitPane for left (creation) panel and the two canvases
-        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, creationPanel, new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftCanvasPanel, rightCanvasPanel));
+        JScrollPane leftScrollPane = new JScrollPane(leftCanvasPanel);
+        JScrollPane rightScrollPane = new JScrollPane(rightCanvasPanel);
+
+        leftScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+        leftScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        rightScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+        rightScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+
+        JSplitPane mainSplitPane = new JSplitPane(
+                JSplitPane.HORIZONTAL_SPLIT,
+                creationPanel,
+                new JSplitPane(
+                        JSplitPane.HORIZONTAL_SPLIT,
+                        leftScrollPane, 
+                        rightScrollPane 
+                ));
+
         mainSplitPane.setOneTouchExpandable(true);
         mainSplitPane.setDividerLocation(200);
         mainSplitPane.setResizeWeight(0.2);
