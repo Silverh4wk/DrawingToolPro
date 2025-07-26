@@ -4,10 +4,11 @@ import java.awt.*;
 import java.awt.geom.AffineTransform;
 import javax.swing.ImageIcon;
 
-
 /**
- * Represents an item that can be drawn on a canvas with properties such as position,
- * rotation, scaling, and flipping. This class is used to manage drawable items in a
+ * Represents an item that can be drawn on a canvas with properties such as
+ * position,
+ * rotation, scaling, and flipping. This class is used to manage drawable items
+ * in a
  * graphics application.
  */
 public class DrawableItem {
@@ -22,6 +23,7 @@ public class DrawableItem {
     private int imageWidth;
     private int imageHeight;
     private static final int MARGIN = 2;
+    private double scale = 1.0;
 
     public DrawableItem(CreationType creationType, int x, int y) {
         this.creationType = creationType;
@@ -37,6 +39,7 @@ public class DrawableItem {
     // Deep copy constructor
     public DrawableItem(DrawableItem other) {
         this.creationType = other.creationType;
+
         this.x = other.x;
         this.y = other.y;
         this.rotationAngle = other.rotationAngle;
@@ -46,11 +49,11 @@ public class DrawableItem {
         this.flippedY = other.flippedY;
     }
 
-    public void setPosition(int x, int y)
-    {
+    public void setPosition(int x, int y) {
         this.x = x;
         this.y = y;
-    } 
+    }
+
     public DrawableItem deepCopy() {
         return new DrawableItem(this);
     }
@@ -122,38 +125,43 @@ public class DrawableItem {
         return new Point(x, y);
     }
 
-    // Draws the item on the provided Graphics context.
-    public void draw(Graphics g) {
-    ImageIcon imageIcon = creationType.getImage();
-    if (imageIcon == null || imageIcon.getImage() == null) {
-        return;
+    public double getScale() {
+        return scale;
     }
 
-    Graphics2D g2d = (Graphics2D) g;
-    Image image = imageIcon.getImage();
+    // Draws the item on the provided Graphics context.
+    public void draw(Graphics g) {
+        ImageIcon imageIcon = creationType.getImage();
+        if (imageIcon == null || imageIcon.getImage() == null) {
+            return;
+        }
 
-    imageWidth = image.getWidth(null);
-    imageHeight = image.getHeight(null);
+        Graphics2D g2d = (Graphics2D) g;
+        Image image = imageIcon.getImage();
 
-    double scaleXActual = scaleX * (flippedX ? -1 : 1);
-    double scaleYActual = scaleY * (flippedY ? -1 : 1);
+        imageWidth = image.getWidth(null);
+        imageHeight = image.getHeight(null);
 
-    AffineTransform transform = new AffineTransform();
+        double scaleXActual = scaleX * (flippedX ? -1 : 1);
+        double scaleYActual = scaleY * (flippedY ? -1 : 1);
 
-    // Translate to the center point (x, y)
-    transform.translate(x, y);
-    
-    // Apply rotation
-    transform.rotate(Math.toRadians(rotationAngle));
+        AffineTransform transform = new AffineTransform();
 
-    // Apply flipping and scaling
-    transform.scale(scaleXActual, scaleYActual);
+        // Translate to the center point (x, y)
+        transform.translate(x, y);
 
-    // Move the image so it is centered
-    transform.translate(-imageWidth / 2.0, -imageHeight / 2.0);
+        // Apply rotation
+        transform.rotate(Math.toRadians(rotationAngle));
 
-    g2d.drawImage(image, transform, null);
-}
+        // Apply flipping and scaling
+        transform.scale(scaleXActual, scaleYActual);
+
+        // Move the image so it is centered
+        transform.translate(-imageWidth / 2.0, -imageHeight / 2.0);
+
+        g2d.drawImage(image, transform, null);
+    }
+
     // Returns the bounding rectangle of the drawable item.
     public Rectangle getBounds() {
         ImageIcon imageIcon = creationType.getImage();
@@ -166,20 +174,20 @@ public class DrawableItem {
         int width = this.imageWidth;
         int height = this.imageHeight;
         // Calculate scaled dimensions
-        int scaledWidth = (int)(width * Math.abs(scaleX));
-        int scaledHeight = (int)(height * Math.abs(scaleY));
+        int scaledWidth = (int) (width * Math.abs(scaleX));
+        int scaledHeight = (int) (height * Math.abs(scaleY));
 
         scaledWidth += 2 * MARGIN;
         scaledHeight += 2 * MARGIN;
 
         // Return centered bounding box
         return new Rectangle(
-            x - scaledWidth / 2,
-            y - scaledHeight / 2,
-            scaledWidth,
-            scaledHeight
-        );
+                x - scaledWidth / 2,
+                y - scaledHeight / 2,
+                scaledWidth,
+                scaledHeight);
     }
+
     // Sets both X and Y scale factors to the same value.
     public void setScale(double scale) {
         scale = Math.max(0.1, Math.min(4.0, scale));

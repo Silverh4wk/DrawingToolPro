@@ -176,7 +176,8 @@ public class ToolbarPanel extends JToolBar {
                 try {
                     BufferedImage image = ImageIO.read(fileChooser.getSelectedFile());
                     if (image != null) {
-                        leftCanvasPanel.placeImportedImage(image);
+                        Point position = activeCanvas.getCenterPositionForImage(image);
+                        activeCanvas.placeImportedImage(image, position);
                     }
                 } catch (IOException ex) {
                     ex.printStackTrace();
@@ -213,8 +214,8 @@ public class ToolbarPanel extends JToolBar {
                         g2.drawImage(raw, 0, 0, null);
                         g2.dispose();
                     }
-
-                    leftCanvasPanel.placeImportedImage(buf);
+                    Point position = activeCanvas.getCenterPositionForImage(buf);
+                    activeCanvas.placeImportedImage(buf, position);
 
                 } catch (UnsupportedFlavorException | IOException ex) {
                     ex.printStackTrace();
@@ -256,8 +257,8 @@ public class ToolbarPanel extends JToolBar {
                     g2.drawImage(raw, 0, 0, null);
                     g2.dispose();
                 }
-
-                leftCanvasPanel.placeImportedImage(buf);
+                Point position = activeCanvas.getCenterPositionForImage(buf);
+                activeCanvas.placeImportedImage(buf, position);
 
             } catch (UnsupportedFlavorException | IOException ex) {
                 ex.printStackTrace();
@@ -342,7 +343,7 @@ public class ToolbarPanel extends JToolBar {
         JSlider rotationSlider = new JSlider(0, 360, 0);
         rotationSlider.setName("transform_rotation");
         // rotationSlider.setBackground(new Color(colorR, colorG, colorB));
-        rotationSlider.setEnabled(activeCanvas == leftCanvasPanel);
+        rotationSlider.setEnabled(true);
 
         // rotationSlider.setForeground(Color.WHITE);
         configureSlider(rotationSlider, 90);
@@ -353,7 +354,7 @@ public class ToolbarPanel extends JToolBar {
         JSlider scaleSlider = new JSlider(50, 200, 100); // 50% to 200%
         scaleSlider.setName("transform_scale");
         // scaleSlider.setBackground(new Color(colorR, colorG, colorB));
-        scaleSlider.setEnabled(activeCanvas == leftCanvasPanel);
+        scaleSlider.setEnabled(true);
 
         // scaleSlider.setForeground(Color.WHITE);
         configureSlider(scaleSlider, majorTickSpacing);
@@ -366,9 +367,9 @@ public class ToolbarPanel extends JToolBar {
         JButton flipVBtn = createIconButton("icons/toolbar/flip_v.png", "Flip V", "Flip Horizontally");
 
         flipHBtn.setName("transform_flipH");
-        flipHBtn.setEnabled(activeCanvas == leftCanvasPanel);
+        flipHBtn.setEnabled(true);
         flipVBtn.setName("transform_flipV");
-        flipVBtn.setEnabled(activeCanvas == leftCanvasPanel);
+        flipVBtn.setEnabled(true);
 
         // Update the event listeners for sliders and buttons
         // (Note:hazim) added a rotation for the right canvas;;
@@ -492,6 +493,9 @@ public class ToolbarPanel extends JToolBar {
                 }
             }
         }
+        leftCanvasPanel.resetTransformation();
+        rightCanvasPanel.resetTransformation();
+
     }
 
     // Helper method to get all components in a container hierarchy
@@ -586,15 +590,7 @@ public class ToolbarPanel extends JToolBar {
                     Rectangle topLeft = new Rectangle(insets.left, insets.top, zoneSize, zoneSize);
                     Rectangle topRight = new Rectangle(getWidth() - insets.right - zoneSize, insets.top, zoneSize,
                             zoneSize);
-                    //it works but undocking from the bottom one just breaks the floating dock its so annoyign
 
-                    // Rectangle bottomLeft = new Rectangle(insets.left, getHeight() - insets.bottom - zoneSize, zoneSize,
-                    //         zoneSize);
-
-                    // Rectangle bottomRight = new Rectangle(getWidth() - insets.right - zoneSize,
-                    //         getHeight() - insets.bottom - zoneSize, zoneSize, zoneSize);
-
-                    // parent frame
                     Window window = SwingUtilities.getWindowAncestor(ToolbarPanel.this);
 
                     if (window instanceof JFrame) {
@@ -605,9 +601,7 @@ public class ToolbarPanel extends JToolBar {
                             dockToolbar(frame, BorderLayout.WEST);
                         } else if (topRight.contains(mousePos)) {
                             dockToolbar(frame, BorderLayout.EAST);
-                        // } else if (bottomLeft.contains(mousePos) || bottomRight.contains(mousePos)) {
-                        //     dockToolbar(frame, BorderLayout.SOUTH);
-                         }
+                        }
                     }
                 }
             }
@@ -624,12 +618,10 @@ public class ToolbarPanel extends JToolBar {
 
         frame.add(this, position);
         // if (BorderLayout.SOUTH.equals(position)) {
-        //     setOrientation(JToolBar.HORIZONTAL);
+        // setOrientation(JToolBar.HORIZONTAL);
         // } else {
-            setOrientation(JToolBar.VERTICAL);
-        //}
-
-        
+        setOrientation(JToolBar.VERTICAL);
+        // }
 
         frame.pack();
         frame.revalidate();
@@ -659,33 +651,22 @@ public class ToolbarPanel extends JToolBar {
             // position indicators
             g2d.setColor(new Color(70, 130, 180));
             g2d.setStroke(new BasicStroke(2));
+            int size = 24;
+            int offset = 12;
+            Insets insets = getInsets();
 
-            if (isFloating()) {
-                int size = 24;
-                int offset = 12;
-                Insets insets = getInsets();
+            // Adjust positions for insets
+            drawDockingIcon(g2d,
+                    insets.left + offset,
+                    insets.top + offset,
+                    size, "◀", "Dock Left");
 
-                // Adjust positions for insets
-                drawDockingIcon(g2d,
-                        insets.left + offset,
-                        insets.top + offset,
-                        size, "◀", "Dock Left");
+            drawDockingIcon(g2d,
+                    getWidth() - insets.right - offset - size,
+                    insets.top + offset,
+                    size, "▶", "Dock Right");
+            g2d.dispose();
 
-                drawDockingIcon(g2d,
-                        getWidth() - insets.right - offset - size,
-                        insets.top + offset,
-                        size, "▶", "Dock Right");
-
-                drawDockingIcon(g2d,
-                        insets.left + offset,
-                        getHeight() - insets.bottom - offset - size,
-                        size, "▼", "Dock Bottom");
-
-                // drawDockingIcon(g2d,
-                //         getWidth() - insets.right - offset - size,
-                //         getHeight() - insets.bottom - offset - size,
-                //         size, "▼", "Dock Bottom");
-            }
         }
     }
 

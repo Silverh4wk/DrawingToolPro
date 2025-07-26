@@ -36,10 +36,12 @@ public class SaveImageTool {
             // filters for supported formats
             FileFilter pngFilter = new FileNameExtensionFilter("PNG Images (*.png)", "png");
             FileFilter jpgFilter = new FileNameExtensionFilter("JPEG Images (*.jpg)", "jpg", "jpeg");
+            FileFilter bmpFilter = new FileNameExtensionFilter("BMP Images (*.bmp)", "bmp");
 
             // add the filters to file chooser
             fileChooser.addChoosableFileFilter(pngFilter);
             fileChooser.addChoosableFileFilter(jpgFilter);
+            fileChooser.addChoosableFileFilter(bmpFilter);
             fileChooser.setFileFilter(pngFilter); // png as default
 
             int option = fileChooser.showSaveDialog(panel);
@@ -56,6 +58,9 @@ public class SaveImageTool {
             if (selectedFilter == jpgFilter) {
                 format = "jpeg";
                 primaryExtension = "jpg";
+            } else if (selectedFilter == bmpFilter) {
+                format = "bmp";
+                primaryExtension = "bmp";
             }
 
             String filePath = file.getAbsolutePath();
@@ -71,13 +76,20 @@ public class SaveImageTool {
                     validExtension = fileName.endsWith(".png");
                 } else if (selectedFilter == jpgFilter) {
                     validExtension = fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
+                } else if (selectedFilter == bmpFilter) {
+                    validExtension = fileName.endsWith(".bmp");
                 }
 
-                // reject the invalid extensions ... idk why but the jpg isnt working for
-                // somereason
-                // need to work more on this
+                // reject the invalid extensions 
                 if (!validExtension) {
-                    String allowed = (selectedFilter == pngFilter) ? ".png" : ".jpg or .jpeg";
+                    String allowed;
+                    if (selectedFilter == pngFilter) {
+                        allowed = ".png";
+                    } else if (selectedFilter == jpgFilter) {
+                        allowed = ".jpg or .jpeg";
+                    } else { 
+                        allowed = ".bmp";
+                    }
                     JOptionPane.showMessageDialog(panel,
                             "Invalid file extension. Please use " + allowed,
                             "Invalid Extension",
@@ -105,8 +117,8 @@ public class SaveImageTool {
             // Save the image
             BufferedImage image = panel.getImage();
 
-            // For JPEG: remove transparency by converting to RGB
-            if (format.equalsIgnoreCase("jpeg")) {
+            // For JPEG: removing the transparency by converting to RGB
+            if (format.equalsIgnoreCase("jpeg") || format.equalsIgnoreCase("bmp")) {
                 BufferedImage rgbImage = new BufferedImage(
                         image.getWidth(),
                         image.getHeight(),

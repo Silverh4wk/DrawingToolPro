@@ -106,6 +106,20 @@ public class CanvasPanel extends JPanel {
                 if (e.getKeyCode() == KeyEvent.VK_SPACE) {
                     spaceDown = true;
                     setCursor(new Cursor(Cursor.MOVE_CURSOR));
+                } else if (e.getKeyCode() == KeyEvent.VK_DELETE) {
+                    handleDeleteKey();
+                }
+            }
+
+            private void handleDeleteKey() {
+                if (canvasType == CanvasType.COMPOSITION && selectedItem != null) {
+                    saveStateForUndo();
+                    drawableItems.remove(selectedItem);
+                    selectedItem = null;
+                    repaint();
+                } else if (canvasType == CanvasType.DRAWING) {
+                    saveStateForUndo();
+                    clearCanvas();
                 }
             }
 
@@ -127,6 +141,8 @@ public class CanvasPanel extends JPanel {
         });
 
         initializeMouseListeners();
+        setDoubleBuffered(true);
+
     }
 
     public void resetRotation() {
@@ -165,6 +181,14 @@ public class CanvasPanel extends JPanel {
         MouseAdapter adapter = new MouseAdapter() {
             private Point prevPoint = null;
             private Point dragStart = null;
+            private boolean isScaling = false;
+            private boolean isRotating = false;
+            private Point scaleStartPoint;
+            private double initialScale;
+            private double initialRotation;
+            private static final double ROTATION_SENSITIVITY = 0.5;
+            private int initialX;
+            private int activeHandle = -1; // -1 = none, 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right
 
             @Override
             public void mousePressed(MouseEvent e) {
@@ -191,8 +215,84 @@ public class CanvasPanel extends JPanel {
                     handleCompositionMousePress(e);
                 } else if (canvasType == CanvasType.DRAWING) {
                 }
+                // check if we're clicking on a handle
+                if (selectedItem != null) {
+                    Point transformedPoint = transformPoint(e.getPoint());
+                    Rectangle bounds = selectedItem.getBounds();
 
+                    Point center = selectedItem.getCenter();
+                    int rotationHandleDistance = 30;
+                    Point rotationHandlePos = new Point(
+                            center.x,
+                            center.y - rotationHandleDistance);
+                    Rectangle rotationHandle = new Rectangle(
+                            rotationHandlePos.x - 5,
+                            rotationHandlePos.y - 5,
+                            10, 10);
+
+                    if (rotationHandle.contains(transformedPoint)) {
+                        isRotating = true;
+                        Point2D itemCenter = selectedItem.getCenter();
+                        initialRotationAngle = Math.atan2(
+                                transformedPoint.y - itemCenter.getY(),
+                                transformedPoint.x - itemCenter.getX());
+                        return;
+                    }
+
+                    // check for scaling handles
+                    int handleSize = 16;
+                    int halfHandle = handleSize / 2;
+
+                    Rectangle[] handles = {
+                            new Rectangle(bounds.x - halfHandle, bounds.y - halfHandle, handleSize, handleSize), // top-left
+                            new Rectangle(bounds.x + bounds.width - halfHandle, bounds.y - halfHandle, handleSize,
+                                    handleSize), // top-right
+                            new Rectangle(bounds.x - halfHandle, bounds.y + bounds.height - halfHandle, handleSize,
+                                    handleSize), // bottom-left
+                            new Rectangle(bounds.x + bounds.width - halfHandle, bounds.y + bounds.height - halfHandle,
+                                    handleSize, handleSize) // bottom-right
+                    };
+
+                    for (int i = 0; i < handles.length; i++) {
+                        if (handles[i].contains(transformedPoint)) {
+                            isScaling = true;
+                            activeHandle = i;
+                            scaleStartPoint = e.getPoint();
+                            initialScale = selectedItem.getScale();
+                            return;
+                        }
+                    }
+                }
                 repaint();
+            }
+
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                Point imgPt = transformPoint(e.getPoint());
+                if (selectedItem != null) {
+                    Rectangle b = selectedItem.getBounds();
+                    Rectangle rotH = new Rectangle(
+                            b.x + b.width / 2 - 5,
+                            b.y - 20 - 5,
+                            10, 10);
+                    if (rotH.contains(imgPt)) {
+                        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                        return;
+                    }
+                    int hs = 8, h2 = hs / 2;
+                    for (Rectangle h : new Rectangle[] {
+                            new Rectangle(b.x - h2, b.y - h2, hs, hs),
+                            new Rectangle(b.x + b.width - h2, b.y - h2, hs, hs),
+                            new Rectangle(b.x - h2, b.y + b.height - h2, hs, hs),
+                            new Rectangle(b.x + b.width - h2, b.y + b.height - h2, hs, hs)
+                    }) {
+                        if (h.contains(imgPt)) {
+                            setCursor(Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR));
+                            return;
+                        }
+                    }
+                }
+                setCursor(Cursor.getDefaultCursor());
             }
 
             @Override
@@ -220,6 +320,43 @@ public class CanvasPanel extends JPanel {
                     repaint();
                     return;
                 }
+                if (isRotating && selectedItem != null) {
+                    Point transformedPoint = transformPoint(e.getPoint());
+                    Point2D center = selectedItem.getCenter();
+
+                    double currentAngle = Math.atan2(
+                            transformedPoint.y - center.getY(),
+                            transformedPoint.x - center.getX());
+
+                    double angleDelta = currentAngle - initialRotationAngle;
+                    selectedItem.setRotationAngle(
+                            selectedItem.getRotationAngle() + Math.toDegrees(angleDelta));
+
+                    initialRotationAngle = currentAngle;
+                    repaint();
+                    return;
+                }
+
+                if (isScaling && selectedItem != null) {
+                    Point current = e.getPoint();
+                    int dx = current.x - scaleStartPoint.x;
+                    int dy = current.y - scaleStartPoint.y;
+
+                    // Calculate distance from center to determine scale factor
+                    Rectangle bounds = selectedItem.getBounds();
+                    Point center = new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+                    double startDistance = Math.sqrt(
+                            Math.pow(scaleStartPoint.x - center.x, 2) +
+                                    Math.pow(scaleStartPoint.y - center.y, 2));
+                    double currentDistance = Math.sqrt(
+                            Math.pow(current.x - center.x, 2) +
+                                    Math.pow(current.y - center.y, 2));
+
+                    double scaleFactor = 1.0 + (dx * 0.01);
+                    selectedItem.setScale(initialScale * scaleFactor);
+                    repaint();
+                    return;
+                }
 
                 Point current = transformPoint(e.getPoint());
 
@@ -239,6 +376,9 @@ public class CanvasPanel extends JPanel {
                 lastPanPoint = null;
                 prevPoint = null;
                 dragStart = null;
+                isScaling = false;
+                isRotating = false;
+                activeHandle = -1;
                 lastPanPoint = null;
                 isRotating = false;
                 if (!spaceDown) {
@@ -267,21 +407,23 @@ public class CanvasPanel extends JPanel {
                 inverse.scale(1 / zoomFactor, 1 / zoomFactor);
                 inverse.translate(-panOffset.x, -panOffset.y);
                 Point2D transformed = inverse.transform(point, null);
-                
+
                 return new Point((int) transformed.getX(), (int) transformed.getY());
 
             }
 
             private void handleCompositionMousePress(MouseEvent e) {
+
+                Point rawPoint = e.getPoint();
+                Point transformedPoint = transformPoint(rawPoint);
                 if (e.isMetaDown() && selectedItem != null) {
                     startRotation(e);
                     return;
                 }
 
-                // Try to select existing item
                 for (int i = drawableItems.size() - 1; i >= 0; i--) {
                     DrawableItem item = drawableItems.get(i);
-                    if (item.getBounds().contains(e.getPoint())) {
+                    if (item.getBounds().contains(transformedPoint)) {
                         selectAndBringToFront(item, i);
                         return;
                     }
@@ -296,11 +438,11 @@ public class CanvasPanel extends JPanel {
             }
 
             private void startRotation(MouseEvent e) {
-                isRotating = true;
+                Point transformedPoint = transformPoint(e.getPoint());
                 Point2D center = selectedItem.getCenter();
                 initialRotationAngle = Math.atan2(
-                        e.getY() - center.getY(),
-                        e.getX() - center.getX());
+                        transformedPoint.getY() - center.getY(),
+                        transformedPoint.getX() - center.getX());
             }
 
             private void selectAndBringToFront(DrawableItem item, int index) {
@@ -330,10 +472,11 @@ public class CanvasPanel extends JPanel {
             }
 
             private void rotateItem(MouseEvent e) {
+                Point transformedPoint = transformPoint(e.getPoint());
                 Point2D center = selectedItem.getCenter();
                 double currentAngle = Math.atan2(
-                        e.getY() - center.getY(),
-                        e.getX() - center.getX());
+                        transformedPoint.getY() - center.getY(),
+                        transformedPoint.getX() - center.getX());
                 double angleDelta = currentAngle - initialRotationAngle;
                 selectedItem.setRotationAngle(selectedItem.getRotationAngle() + Math.toDegrees(angleDelta));
                 initialRotationAngle = currentAngle;
@@ -402,21 +545,16 @@ public class CanvasPanel extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-
         Graphics2D g2d = (Graphics2D) g;
-
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
         AffineTransform originalTransform = g2d.getTransform();
-
         g2d.translate(panOffset.x, panOffset.y);
         g2d.scale(zoomFactor, zoomFactor);
-        double centerX = getWidth() / 2.0,
-                centerY = getHeight() / 2.0;
-        g2d.rotate(Math.toRadians(rotationAngle), centerX, centerY);
-
+        double centerX = getWidth() / 2.0;
+        double centerY = getHeight() / 2.0;
         g2d.rotate(Math.toRadians(rotationAngle), centerX, centerY);
 
         if (canvasType == CanvasType.COMPOSITION) {
@@ -425,19 +563,84 @@ public class CanvasPanel extends JPanel {
 
         g2d.drawImage(canvasImage, 0, 0, null);
 
-        if (canvasType == CanvasType.COMPOSITION && drawableItems != null) {
+        if (drawableItems != null) {
             for (DrawableItem item : drawableItems) {
                 item.draw(g2d);
             }
+
+            // selection and handles for the selected item
             if (selectedItem != null) {
+
                 g2d.setColor(Color.BLUE);
-                g2d.setStroke(new BasicStroke());
+                g2d.setStroke(
+                        new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[] { 3 }, 0));
                 Rectangle bounds = selectedItem.getBounds();
+                Rectangle viewBounds = transformBounds(bounds);
+
                 g2d.drawRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+                // the rotation handles
+
+                Point center = selectedItem.getCenter();
+                int rotationHandleDistance = 30;
+                int rotationHandleX = center.x;
+                int rotationHandleY = center.y - rotationHandleDistance;
+
+                g2d.setColor(Color.RED);
+                g2d.drawLine(center.x, center.y, rotationHandleX, rotationHandleY);
+                g2d.fillOval(rotationHandleX - 5, rotationHandleY - 5, 10, 10);
+
+                // the scaling handles at corners
+                g2d.setColor(Color.GREEN);
+                int handleSize = 8;
+                int halfHandle = handleSize / 2;
+
+                // Top-left
+                g2d.fillRect(bounds.x - halfHandle, bounds.y - halfHandle, handleSize, handleSize);
+                // Top-right
+                g2d.fillRect(bounds.x + bounds.width - halfHandle, bounds.y - halfHandle, handleSize, handleSize);
+                // Bottom-left
+                g2d.fillRect(bounds.x - halfHandle, bounds.y + bounds.height - halfHandle, handleSize, handleSize);
+                // Bottom-right
+                g2d.fillRect(bounds.x + bounds.width - halfHandle, bounds.y + bounds.height - halfHandle, handleSize,
+                        handleSize);
             }
         }
 
         g2d.setTransform(originalTransform);
+    }
+
+    // both of these functions sercve as helpers for the ^ above, to get the view
+    // bound working properly
+    private Rectangle transformBounds(Rectangle bounds) {
+        Point2D topLeft = new Point2D.Double(bounds.x, bounds.y);
+        Point2D bottomRight = new Point2D.Double(bounds.x + bounds.width, bounds.y + bounds.height);
+
+        topLeft = transformToView(topLeft);
+        bottomRight = transformToView(bottomRight);
+
+        return new Rectangle(
+                (int) topLeft.getX(),
+                (int) topLeft.getY(),
+                (int) (bottomRight.getX() - topLeft.getX()),
+                (int) (bottomRight.getY() - topLeft.getY()));
+    }
+
+    public void resetTransformation() {
+        panOffset.setLocation(0, 0);
+        zoomFactor = 1.0f;
+        rotationAngle = 0.0f;
+        repaint();
+    }
+
+    private Point2D transformToView(Point2D point) {
+        AffineTransform transform = new AffineTransform();
+        transform.translate(panOffset.x, panOffset.y);
+        transform.scale(zoomFactor, zoomFactor);
+        double centerX = getWidth() / 2.0;
+        double centerY = getHeight() / 2.0;
+        transform.rotate(Math.toRadians(rotationAngle), centerX, centerY);
+        return transform.transform(point, null);
     }
 
     public void clearCanvas() {
@@ -512,18 +715,28 @@ public class CanvasPanel extends JPanel {
         }
     }
 
-    public void placeImportedImage(BufferedImage image) {
+    public void placeImportedImage(BufferedImage image, Point position) {
+
+        if (position == null) {
+            position = getCenterPositionForImage(image);
+        }
         if (canvasType == CanvasType.COMPOSITION) {
             CreationType importedCreation = new CreationType("Imported Image", image);
-
-            int centerX = getWidth() / 2;
-            int centerY = getHeight() / 2;
-
-            DrawableItem newItem = new DrawableItem(importedCreation, centerX, centerY);
+            DrawableItem newItem = new DrawableItem(importedCreation, position.x, position.y);
             drawableItems.add(newItem);
             selectedItem = newItem;
-            repaint();
+        } else {
+            Graphics2D g = canvasImage.createGraphics();
+            g.drawImage(image, position.x, position.y, null);
+            g.dispose();
         }
+        repaint();
+    }
+
+    public Point getCenterPositionForImage(BufferedImage image) {
+        return new Point(
+                (getWidth() - image.getWidth()) / 2,
+                (getHeight() - image.getHeight()) / 2);
     }
 
     public CreationType getCurrentCreation() {
