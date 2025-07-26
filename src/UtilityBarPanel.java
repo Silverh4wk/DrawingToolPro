@@ -3,6 +3,8 @@ package src;
 import Helpers.Helpers;
 import Helpers.Helpers.KeyBindingHelper;
 import Tools.BrushSizeTool;
+import Tools.SaveImageTool;
+
 import java.awt.*;
 import javax.swing.*;
 
@@ -20,6 +22,8 @@ public class UtilityBarPanel extends JPanel {
         add(BrushSizeTool.create(canvasPanel));
         add(createIconButton("icons/toolbar/undo.png", e -> canvasPanel.undo()));
         add(createIconButton("icons/toolbar/redo.png", e -> canvasPanel.redo()));
+        add(createIconButton("icons/toolbar/save.png", e -> SaveImageTool.saveImage(canvasPanel)));
+
     }
 
     private JButton createIconButton(String iconPath, java.awt.event.ActionListener action) {
@@ -36,6 +40,5 @@ public class UtilityBarPanel extends JPanel {
         KeyBindingHelper.bind(this, "META Z", "undo", e -> canvasPanel.undo());
         KeyBindingHelper.bind(this, "control Y", "redo", e -> canvasPanel.redo());
     }
-    
-}
 
+}

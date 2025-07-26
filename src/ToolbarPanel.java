@@ -8,7 +8,6 @@ package src;
 
 import Helpers.*;
 import Tools.*;
-import javafx.scene.input.Clipboard;
 
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
@@ -34,6 +33,8 @@ public class ToolbarPanel extends JToolBar {
     private JButton leftCanvasBtn;
     private JButton rightCanvasBtn;
     private CanvasPanel activeCanvas;
+    private boolean floating = false;
+    private Point dragStart;
     public int iconSizeX = 24;
     public int iconSizeY = 24;
     public int brushSize = 0;
@@ -53,21 +54,48 @@ public class ToolbarPanel extends JToolBar {
         super(JToolBar.VERTICAL);
         setFloatable(true); // for draggin it around
         setRollover(true);
+        setupDragHandling();
+        setOrientation(JToolBar.VERTICAL);
         this.toolManager = toolManager;
         this.leftCanvasPanel = leftCanvasPanel;
         this.rightCanvasPanel = rightCanvasPanel;
         this.colorChangeCallback = colorChangeCallback;
         this.creationPanel = creationPanel;
 
-        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBorder(new EmptyBorder(10, 10, 10, 10));
-        setPreferredSize(new Dimension(dimensionWidth, getHeight()));
-        setBackground(new Color(colorR, colorG, colorB)); // Dark background
-        initializeToolbar();
+        addPropertyChangeListener("floating", evt -> {
+            boolean nowFloating = (Boolean) evt.getNewValue();
+            setFloating(nowFloating);
+            if (nowFloating) {
+                setFloatingUI();
+                Window w = SwingUtilities.getWindowAncestor(ToolbarPanel.this);
+                if (w != null)
+                    w.pack();
+            } else {
+                setDockedUI();
+            }
+            adjustLayoutForOrientation();
+        });
+        addPropertyChangeListener("orientation", evt -> adjustLayoutForOrientation());
+
+        setupDockingZones();
+        setupDragHandling();
         setupKeyBindings();
+
+        setDockedUI();
+        initializeToolbar();
+
+    }
+
+    public boolean isFloating() {
+        return floating;
+    }
+
+    public void setFloating(boolean fl) {
+        this.floating = fl;
     }
 
     private void initializeToolbar() {
+        removeAll();
         // Drawing Tools Section
         addSection("Drawing Tools", createDrawingToolsPanel());
 
@@ -79,11 +107,12 @@ public class ToolbarPanel extends JToolBar {
 
         // Image Tools Section
         addSection("Image Tools", createImageToolsPanel());
+
     }
 
     private void addSection(String title, JPanel content) {
         JLabel titleLabel = new JLabel(title);
-        titleLabel.setForeground(Color.WHITE);
+        // titleLabel.setForeground(Color.WHITE);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         add(titleLabel);
 
@@ -97,17 +126,17 @@ public class ToolbarPanel extends JToolBar {
     }
 
     private JPanel createDrawingToolsPanel() {
-        JPanel panel = new JPanel(new GridLayout(2, 2, horizontalGap, verticalGap));
-        panel.setBackground(new Color(colorR, colorG, colorB));
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 5));
+        // panel.setBackground(new Color(colorR, colorG, colorB));
 
         // Pen Tool
-        addToolButton(panel, "icons/toolbar/pen.png", new PenTool(), "");
+        addToolButton(panel, "icons/toolbar/pen.png", new PenTool(), "", "Pen tool");
 
         // Eraser Tool
-        addToolButton(panel, "icons/toolbar/eraser.png", new EraserTool(Color.WHITE), "");
+        addToolButton(panel, "icons/toolbar/eraser.png", new EraserTool(Color.WHITE), "", "Eraser tool");
 
         // Clear Canvas Button
-        JButton clearBtn = createIconButton("icons/toolbar/clear.png", "");
+        JButton clearBtn = createIconButton("icons/toolbar/clear.png", "", "Clear canvas");
         clearBtn.addActionListener(e -> {
             if (activeCanvas != null) { // Add a null check for safety
                 new ClearCanvasTool(activeCanvas).onPress(); // Clear ONLY the activeCanvas
@@ -118,25 +147,25 @@ public class ToolbarPanel extends JToolBar {
         panel.add(clearBtn);
 
         // Color Selector
-        JButton colorBtn = createIconButton("icons/toolbar/colorChooser.png", "");
+        JButton colorBtn = createIconButton("icons/toolbar/colorChooser.png", "", "Color selector");
         colorBtn.addActionListener(e -> ColorSelectorTool.onPress(rightCanvasPanel, colorChangeCallback));
         panel.add(colorBtn);
         // zoom
-        JButton zoomResetBtn = createIconButton("icons/toolbar/zoom_reset.png", "");
+        JButton zoomResetBtn = createIconButton("icons/toolbar/zoom_reset.png", "", "reset the canvas");
         zoomResetBtn.addActionListener(e -> rightCanvasPanel.resetZoom());
         zoomResetBtn.addActionListener(e -> leftCanvasPanel.resetZoom());
         rightCanvasPanel.repaint(); // fixed the build problem for mac lol
         panel.add(zoomResetBtn);
 
         // Merge Button
-        mergeButton = createIconButton("icons/toolbar/merge.png", "");
+        mergeButton = createIconButton("icons/toolbar/merge.png", "", "merge");
         mergeButton.addActionListener(e -> {
             CanvasMerger.insertImageLayer(leftCanvasPanel, rightCanvasPanel);
         });
         panel.add(mergeButton);
 
         // custom images
-        JButton importImageBtn = createIconButton("icons/toolbar/import.png", "");
+        JButton importImageBtn = createIconButton("icons/toolbar/import.png", "", "import image");
         importImageBtn.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
             fileChooser.setDialogTitle("Select an Image File");
@@ -160,7 +189,7 @@ public class ToolbarPanel extends JToolBar {
         panel.add(importImageBtn);
 
         // pasting from clipboard
-        JButton pasteImageBtn = createIconButton("icons/toolbar/paste.png", "");
+        JButton pasteImageBtn = createIconButton("icons/toolbar/paste.png", "", "paste image");
         pasteImageBtn.addActionListener(e -> {
             // get the system clipboard
             java.awt.datatransfer.Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
@@ -267,10 +296,10 @@ public class ToolbarPanel extends JToolBar {
 
     private JPanel createCanvasSelectionPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 2, horizontalGap, verticalGap));
-        panel.setBackground(new Color(colorR, colorG, colorB));
+        // panel.setBackground(new Color(colorR, colorG, colorB));
 
-        leftCanvasBtn = createIconButton("icons/toolbar/art.png", "Composition");
-        rightCanvasBtn = createIconButton("icons/toolbar/canvas.png", "Drawing");
+        leftCanvasBtn = createIconButton("icons/toolbar/art.png", "Composition", "Left canvas");
+        rightCanvasBtn = createIconButton("icons/toolbar/canvas.png", "Drawing", "Right canvas");
 
         leftCanvasBtn.addActionListener(e -> setActiveCanvas(leftCanvasPanel));
         rightCanvasBtn.addActionListener(e -> setActiveCanvas(rightCanvasPanel));
@@ -285,7 +314,7 @@ public class ToolbarPanel extends JToolBar {
 
     private JPanel createLibraryCategoriesPanel() {
         JPanel panel = new JPanel(new GridLayout(3, 1, horizontalGap, verticalGap));
-        panel.setBackground(new Color(colorR, colorG, colorB));
+        // panel.setBackground(new Color(colorR, colorG, colorB));
 
         String[][] categories = {
                 { "Animal", "icons/toolbar/animal.png" },
@@ -294,7 +323,7 @@ public class ToolbarPanel extends JToolBar {
         };
 
         for (String[] category : categories) {
-            JButton btn = createIconButton(category[1], category[0]);
+            JButton btn = createIconButton(category[1], category[0], "");
             btn.addActionListener(e -> creationPanel.filterCreations(category[0]));
             panel.add(btn);
         }
@@ -305,35 +334,41 @@ public class ToolbarPanel extends JToolBar {
     private JPanel createImageToolsPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(new Color(colorR, colorG, colorB));
+        // panel.setBackground(new Color(colorR, colorG, colorB));
 
         // Rotation Slider
-        JLabel rotationLabel = new JLabel("Rotation: 0Â°");
-        rotationLabel.setForeground(Color.WHITE);
+        JLabel rotationLabel = new JLabel("Rotation: 0°");
+        // rotationLabel.setForeground(Color.WHITE);
         JSlider rotationSlider = new JSlider(0, 360, 0);
         rotationSlider.setName("transform_rotation");
-        rotationSlider.setBackground(new Color(colorR, colorG, colorB));
-        rotationSlider.setForeground(Color.WHITE);
+        // rotationSlider.setBackground(new Color(colorR, colorG, colorB));
+        rotationSlider.setEnabled(activeCanvas == leftCanvasPanel);
+
+        // rotationSlider.setForeground(Color.WHITE);
         configureSlider(rotationSlider, 90);
 
         // Scale Slider
         JLabel scaleLabel = new JLabel("Scale: 100%");
-        scaleLabel.setForeground(Color.WHITE);
+        // scaleLabel.setForeground(Color.WHITE);
         JSlider scaleSlider = new JSlider(50, 200, 100); // 50% to 200%
         scaleSlider.setName("transform_scale");
-        scaleSlider.setBackground(new Color(colorR, colorG, colorB));
-        scaleSlider.setForeground(Color.WHITE);
+        // scaleSlider.setBackground(new Color(colorR, colorG, colorB));
+        scaleSlider.setEnabled(activeCanvas == leftCanvasPanel);
+
+        // scaleSlider.setForeground(Color.WHITE);
         configureSlider(scaleSlider, majorTickSpacing);
 
         // Flip Panel
         JPanel flipPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, horizontalGap, verticalGap));
-        flipPanel.setBackground(new Color(colorR, colorG, colorB));
+        // flipPanel.setBackground(new Color(colorR, colorG, colorB));
 
-        JButton flipHBtn = createIconButton("icons/toolbar/flip_h.png", "Flip H");
-        JButton flipVBtn = createIconButton("icons/toolbar/flip_v.png", "Flip V");
+        JButton flipHBtn = createIconButton("icons/toolbar/flip_h.png", "Flip H", "Flip Horizontally");
+        JButton flipVBtn = createIconButton("icons/toolbar/flip_v.png", "Flip V", "Flip Horizontally");
 
         flipHBtn.setName("transform_flipH");
+        flipHBtn.setEnabled(activeCanvas == leftCanvasPanel);
         flipVBtn.setName("transform_flipV");
+        flipVBtn.setEnabled(activeCanvas == leftCanvasPanel);
 
         // Update the event listeners for sliders and buttons
         // (Note:hazim) added a rotation for the right canvas;;
@@ -341,7 +376,7 @@ public class ToolbarPanel extends JToolBar {
         rotationSlider.addChangeListener(e -> {
             if (!rotationSlider.getValueIsAdjusting()) {
                 int value = rotationSlider.getValue();
-                rotationLabel.setText("Rotation: " + value + "Â°");
+                rotationLabel.setText("Rotation: " + value + "°");
 
                 if (activeCanvas == leftCanvasPanel) {
                     if (activeCanvas.getSelectedItem() != null) {
@@ -404,12 +439,13 @@ public class ToolbarPanel extends JToolBar {
     }
 
     // * Creates an icon button with the specified icon path and text
-    private JButton createIconButton(String iconPath, String text) {
+    private JButton createIconButton(String iconPath, String text, String tooltip) {
         ImageIcon icon = new ImageIcon(iconPath);
         icon = Helpers.iconSizeChanger(icon, iconSizeX, iconSizeY);
 
         JButton button = new JButton(text);
         button.setIcon(icon);
+        button.setToolTipText(tooltip);
         button.setHorizontalTextPosition(SwingConstants.CENTER);
         button.setVerticalTextPosition(SwingConstants.BOTTOM);
         button.setFocusPainted(false);
@@ -418,8 +454,8 @@ public class ToolbarPanel extends JToolBar {
     }
 
     // * Adds a tool button to the specified panel with an icon and action listener
-    private void addToolButton(JPanel panel, String iconPath, Tool tool, String text) {
-        JButton button = createIconButton(iconPath, text);
+    private void addToolButton(JPanel panel, String iconPath, Tool tool, String text, String tip) {
+        JButton button = createIconButton(iconPath, text, tip);
         button.addActionListener(e -> {
             if (activeCanvas == rightCanvasPanel) {
                 toolManager.setTool(tool);
@@ -431,8 +467,12 @@ public class ToolbarPanel extends JToolBar {
     // * Sets the active canvas
     private void setActiveCanvas(CanvasPanel canvas) {
         this.activeCanvas = canvas;
-        leftCanvasBtn.setBackground(canvas == leftCanvasPanel ? new Color(80, 80, 80) : new Color(64, 64, 64));
-        rightCanvasBtn.setBackground(canvas == rightCanvasPanel ? new Color(80, 80, 80) : new Color(64, 64, 64));
+        leftCanvasBtn.setBorder(canvas == leftCanvasPanel
+                ? BorderFactory.createLineBorder(Color.BLUE, 2)
+                : BorderFactory.createEmptyBorder(2, 2, 2, 2));
+        rightCanvasBtn.setBorder(canvas == rightCanvasPanel
+                ? BorderFactory.createLineBorder(Color.BLUE, 2)
+                : BorderFactory.createEmptyBorder(2, 2, 2, 2));
 
         // Enable/disable transformation controls based on active canvas
         boolean isCompositionCanvas = (canvas == leftCanvasPanel);
@@ -466,8 +506,208 @@ public class ToolbarPanel extends JToolBar {
         return components;
     }
 
+    private void setupDragHandling() {
+        addMouseListener(new MouseAdapter() {
+            private Point dragStart;
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (isFloating()) {
+                    dragStart = e.getPoint();
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                dragStart = null;
+                repaint(); // Redraw docking hints
+            }
+        });
+
+        addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (isFloating() && dragStart != null) {
+                    Window window = SwingUtilities.getWindowAncestor(ToolbarPanel.this);
+                    if (window != null) {
+                        Point windowLoc = window.getLocation();
+                        Point dragPoint = e.getLocationOnScreen();
+                        window.setLocation(
+                                dragPoint.x - dragStart.x,
+                                dragPoint.y - dragStart.y);
+                    }
+                }
+            }
+        });
+    }
+
+    private void setFloatingUI() {
+        // setBackground(new Color(240, 240, 240));
+        setBorder(BorderFactory.createCompoundBorder());
+        setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+    }
+
+    private void setDockedUI() {
+        // setBackground(new Color(colorR, colorG, colorB));
+        setBorder(new EmptyBorder(10, 10, 10, 10));
+        setCursor(Cursor.getDefaultCursor());
+    }
+
+    private void adjustLayoutForOrientation() {
+        if (isFloating()) {
+            if (getOrientation() == JToolBar.HORIZONTAL) {
+                setPreferredSize(new Dimension(500, 180));
+            } else {
+                setPreferredSize(new Dimension(250, Integer.MAX_VALUE));
+            }
+        } else {
+            if (getOrientation() == JToolBar.HORIZONTAL) {
+                setPreferredSize(null);
+            } else {
+                setPreferredSize(new Dimension(dimensionWidth, getHeight()));
+            }
+        }
+
+        removeAll();
+        initializeToolbar();
+        revalidate();
+        repaint();
+    }
+
+    private void setupDockingZones() {
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (isFloating()) {
+                    Insets insets = getInsets();
+                    Point mousePos = e.getPoint();
+                    int zoneSize = 40;
+
+                    Rectangle topLeft = new Rectangle(insets.left, insets.top, zoneSize, zoneSize);
+                    Rectangle topRight = new Rectangle(getWidth() - insets.right - zoneSize, insets.top, zoneSize,
+                            zoneSize);
+                    //it works but undocking from the bottom one just breaks the floating dock its so annoyign
+
+                    // Rectangle bottomLeft = new Rectangle(insets.left, getHeight() - insets.bottom - zoneSize, zoneSize,
+                    //         zoneSize);
+
+                    // Rectangle bottomRight = new Rectangle(getWidth() - insets.right - zoneSize,
+                    //         getHeight() - insets.bottom - zoneSize, zoneSize, zoneSize);
+
+                    // parent frame
+                    Window window = SwingUtilities.getWindowAncestor(ToolbarPanel.this);
+
+                    if (window instanceof JFrame) {
+                        JFrame frame = (JFrame) window;
+
+                        // chekc which zone was clicked
+                        if (topLeft.contains(mousePos)) {
+                            dockToolbar(frame, BorderLayout.WEST);
+                        } else if (topRight.contains(mousePos)) {
+                            dockToolbar(frame, BorderLayout.EAST);
+                        // } else if (bottomLeft.contains(mousePos) || bottomRight.contains(mousePos)) {
+                        //     dockToolbar(frame, BorderLayout.SOUTH);
+                         }
+                    }
+                }
+            }
+        });
+    }
+
+    private void dockToolbar(JFrame frame, String position) {
+        setFloating(false);
+
+        Container parent = getParent();
+        if (parent != null) {
+            parent.remove(this);
+        }
+
+        frame.add(this, position);
+        // if (BorderLayout.SOUTH.equals(position)) {
+        //     setOrientation(JToolBar.HORIZONTAL);
+        // } else {
+            setOrientation(JToolBar.VERTICAL);
+        //}
+
+        
+
+        frame.pack();
+        frame.revalidate();
+        repaint();
+    }
+
     private void setupKeyBindings() {
         bindPasteShortcut();
     }
 
+    @Override
+    public Dimension getPreferredSize() {
+        return new Dimension(dimensionWidth, super.getPreferredSize().height);
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+
+        if (isFloating()) {
+            Graphics2D g2d = (Graphics2D) g.create();
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            g2d.setColor(new Color(255, 255, 255, 150));
+            g2d.fillRect(0, 0, getWidth(), getHeight());
+
+            // position indicators
+            g2d.setColor(new Color(70, 130, 180));
+            g2d.setStroke(new BasicStroke(2));
+
+            if (isFloating()) {
+                int size = 24;
+                int offset = 12;
+                Insets insets = getInsets();
+
+                // Adjust positions for insets
+                drawDockingIcon(g2d,
+                        insets.left + offset,
+                        insets.top + offset,
+                        size, "◀", "Dock Left");
+
+                drawDockingIcon(g2d,
+                        getWidth() - insets.right - offset - size,
+                        insets.top + offset,
+                        size, "▶", "Dock Right");
+
+                drawDockingIcon(g2d,
+                        insets.left + offset,
+                        getHeight() - insets.bottom - offset - size,
+                        size, "▼", "Dock Bottom");
+
+                // drawDockingIcon(g2d,
+                //         getWidth() - insets.right - offset - size,
+                //         getHeight() - insets.bottom - offset - size,
+                //         size, "▼", "Dock Bottom");
+            }
+        }
+    }
+
+    private void drawDockingIcon(Graphics2D g2d, int x, int y, int size, String symbol, String text) {
+        g2d.setColor(new Color(230, 230, 250));
+        g2d.fillRoundRect(x, y, size, size, 5, 5);
+
+        g2d.setColor(new Color(70, 130, 180));
+        g2d.drawRoundRect(x, y, size, size, 5, 5);
+
+        // symbol
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
+        FontMetrics fm = g2d.getFontMetrics();
+        int sx = x + (size - fm.stringWidth(symbol)) / 2;
+        int sy = y + ((size - fm.getHeight()) / 2) + fm.getAscent();
+        g2d.drawString(symbol, sx, sy);
+
+        // text label
+        g2d.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        fm = g2d.getFontMetrics();
+        int tx = x + (size - fm.stringWidth(text)) / 2;
+        int ty = y + size + fm.getHeight() + 2;
+        g2d.drawString(text, tx, ty);
+    }
 }

@@ -208,7 +208,7 @@ public class CanvasPanel extends JPanel {
                         lastPanPoint = current1;
                         repaint();
                     } else {
-                        lastPanPoint = current1; 
+                        lastPanPoint = current1;
                     }
                     return;
                 }
@@ -250,26 +250,26 @@ public class CanvasPanel extends JPanel {
 
             private Point transformPoint(Point p) {
                 // apply the inverse transformations to get image coordinates
-                double x = (p.x - panOffset.x) / zoomFactor;
-                double y = (p.y - panOffset.y) / zoomFactor;
+                double centerX = getWidth() / 2.0;
+                double centerY = getHeight() / 2.0;
+                double x = p.x;
+                double y = p.y;
+
+                Point2D.Double point = new Point2D.Double(x, y);
+                AffineTransform inverse = new AffineTransform();
 
                 if (canvasType == CanvasType.COMPOSITION) {
                     // reverse canvas rotation
-                    double centerX = getWidth() / 2.0;
-                    double centerY = getHeight() / 2.0;
-
-                    double tx = x - centerX;
-                    double ty = y - centerY;
-
-                    double rad = Math.toRadians(-canvasRotationAngle);
-                    double rx = tx * Math.cos(rad) - ty * Math.sin(rad);
-                    double ry = tx * Math.sin(rad) + ty * Math.cos(rad);
-
-                    x = rx + centerX;
-                    y = ry + centerY;
+                    inverse.rotate(Math.toRadians(-canvasRotationAngle), centerX, centerY);
                 }
 
-                return new Point((int) x, (int) y);
+                inverse.rotate(Math.toRadians(-rotationAngle), centerX, centerY);
+                inverse.scale(1 / zoomFactor, 1 / zoomFactor);
+                inverse.translate(-panOffset.x, -panOffset.y);
+                Point2D transformed = inverse.transform(point, null);
+                
+                return new Point((int) transformed.getX(), (int) transformed.getY());
+
             }
 
             private void handleCompositionMousePress(MouseEvent e) {
@@ -374,7 +374,7 @@ public class CanvasPanel extends JPanel {
 
                 toolManager.useTool(g,
                         end.x, end.y,
-                        (int) (brushSize / zoomFactor),
+                        brushSize,
                         brushColor,
                         start.x, start.y);
 
@@ -409,13 +409,13 @@ public class CanvasPanel extends JPanel {
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
+        AffineTransform originalTransform = g2d.getTransform();
+
         g2d.translate(panOffset.x, panOffset.y);
         g2d.scale(zoomFactor, zoomFactor);
-
-        int centerX = getWidth() / 2;
-        int centerY = getHeight() / 2;
-
-        AffineTransform originalTransform = g2d.getTransform();
+        double centerX = getWidth() / 2.0,
+                centerY = getHeight() / 2.0;
+        g2d.rotate(Math.toRadians(rotationAngle), centerX, centerY);
 
         g2d.rotate(Math.toRadians(rotationAngle), centerX, centerY);
 
@@ -431,14 +431,13 @@ public class CanvasPanel extends JPanel {
             }
             if (selectedItem != null) {
                 g2d.setColor(Color.BLUE);
-                g2d.setStroke(new BasicStroke(2 / zoomFactor));
+                g2d.setStroke(new BasicStroke());
                 Rectangle bounds = selectedItem.getBounds();
                 g2d.drawRect(bounds.x, bounds.y, bounds.width, bounds.height);
             }
         }
 
         g2d.setTransform(originalTransform);
-        g2d.dispose();
     }
 
     public void clearCanvas() {

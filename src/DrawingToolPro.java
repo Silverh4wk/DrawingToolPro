@@ -37,10 +37,10 @@ public class DrawingToolPro extends JFrame {
     // hand drawing tool
     // private JSplitPane splitPane;
     Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-
+    
     public DrawingToolPro(IntVector2D leftCanvasDimensions, IntVector2D rightCanvasDimensions) {
         super("DrawingToolPro");
-
+        
         setSize((int) screenSize.getWidth(), (int) screenSize.getHeight());
         setLayout(new BorderLayout());
         setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -58,7 +58,7 @@ public class DrawingToolPro extends JFrame {
         // Pass both canvas panels and creationPanel to ToolbarPanel constructor
         ToolbarPanel toolbar = new ToolbarPanel(toolManager, leftCanvasPanel, rightCanvasPanel, this::onColorChange,
                 creationPanel);
-
+        
         // Pass both canvas panels and creationPanel to FileMenuBar
         fileMenuBar = new FileMenuBar(leftCanvasPanel, rightCanvasPanel, creationPanel);
 
