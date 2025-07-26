@@ -4,3 +4,6 @@ Changes made for our second chance:
 - zoom now works for both canvases and now uses a mousewheel motionlistener, still not usable as an actual zoom in to draw feature
 - added uploading of images via both the file chooser and from the clipboard, u can also use the ctrl v shortcut.
 - added panning, so now u can hold down space bar and drag the canvas around, helps with the zoomed in or big canvases.
+- added jtoolbar for the tool bar, so now it can be moved from left to right or right to left.
+- added bitmap support
+- added mouse image interactions and finally are working correctly .
