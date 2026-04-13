@@ -3,10 +3,33 @@
 
 ## Overview
 
-**DrawingToolPro** is a Java-based painting tool that supports various canvas tools, drawing options, artwork libraries, and customizable utilities. The application demonstrates principles of Object-Oriented Design (OOPDs) and provides a clean GUI using FlatLaf.
+**DrawingToolPro** is a Java-based painting tool that supports various canvas tools, drawing options, artwork libraries, and customizable utilities. The application demonstrates principles of Object-Oriented Design (OOPDs).
 
 ---
 
+## Main Features
+![image info](./pictures/FirstImage.png)
+
+![image info](./pictures/SecondImage.png)
+
+![image info](./pictures/ThirdImage.png)
+
+### Free hand drawing 
+- Freehand drawing with adjustable brush size and color
+- Basic shapes: rectangle, ellipse, line
+- Color picker and fill support
+- Undo / Redo
+- Save/load project
+- Export to PNG / JPEG
+
+### Dual Canvas System
+- The left canvas is used for placing image references
+- The right canvas is used for free hand drawing
+- An image library can be used to insert images on the left canvas
+- The clipboard can be used to insert images on the left canvas
+- The left canvas can be merged onto the right canvas for drawing
+   
+---
 ## Folder Structure
 
 ```
